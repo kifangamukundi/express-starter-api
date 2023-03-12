@@ -1,3 +1,4 @@
+const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const ErrorResponse = require("../utils/errorResponse");
 const User = require("../models/User");
@@ -266,8 +267,32 @@ exports.resetPassword = async (req, res, next) => {
   }
 };
 
+// desc refresh a token
+exports.refreshToken = async (req, res, next) => {
+  const { refresh } = req.body;
+
+  if (!refresh) {
+    return next(new ErrorResponse("No refresh token passed", 400));
+  }
+
+  try {
+    const decoded = jwt.verify(refresh, process.env.REFRESH_SECRET);
+    // todo: check if token is valid and return early
+    const user = await User.findOne({ email: decoded.email });
+
+    sendRefreshToken(user, 200, refresh, res);
+  } catch (err) {
+    next(err);
+  }
+};
+
 const sendToken = (user, statusCode, res) => {
   const acccess = user.getSignedJwtAccessToken();
   const refresh = user.getSignedJwtRefreshToken();
+  res.status(statusCode).json({ sucess: true, user:{accessToken: acccess, refreshToken: refresh} });
+};
+const sendRefreshToken = (user, statusCode, originalRefreshToken, res) => {
+  const acccess = user.getSignedJwtAccessToken();
+  const refresh = originalRefreshToken;
   res.status(statusCode).json({ sucess: true, user:{accessToken: acccess, refreshToken: refresh} });
 };
