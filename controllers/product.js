@@ -96,17 +96,16 @@ exports.createProductRoute =async (req, res, next) => {
       otherImages,
       categories,
     });
-
-    await product.save();
-
-    // Add categories to the product
-    for (const categoryId of categories) {
-      const category = await Category.findById(categoryId);
-      if (category) {
-        category.products.push(product._id);
-        await category.save();
-      }
-    }
+    
+    await Promise.all(
+      categories.map(categoryId =>
+        Category.findByIdAndUpdate(
+          categoryId,
+          { $addToSet: { products: product._id } },
+          { new: true }
+        )
+      )
+    );
 
     res.status(201).json({ sucess: true, message: "Success", data:{product: product} });
   } catch (err) {
