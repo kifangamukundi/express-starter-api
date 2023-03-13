@@ -116,17 +116,20 @@ exports.createProductRoute =async (req, res, next) => {
 // desc update a product
 exports.updateProductRoute = async (req, res, next) => {
   const { id } = req.params;
-  const { title, summary, slug, content, defaultImage, otherImages} = req.body;
+  const { title, summary, categories, slug, content, defaultImage, otherImages } = req.body;
 
   try {
-    const product = await Product.findById({_id:id});
+    const product = await Product.findById(id);
 
-    if (product == null) {
+    if (!product) {
       return next(new ErrorResponse("No product found", 404));
     }
 
-    // We are using the if statements to check if the request body contains any properties that we want to update for the product. 
-    // This is because we want to only update the properties that are included in the request body, and leave the other properties unchanged.
+    // Remove all current categories from the product
+    await Category.updateMany({ _id: { $in: product.categories } }, { $pull: { products: id } });
+    product.categories = [];
+
+    // Update the product's properties
     if (title != null) {
       product.title = title;
     }
@@ -151,13 +154,27 @@ exports.updateProductRoute = async (req, res, next) => {
       product.otherImages = otherImages;
     }
 
-    const updatedProduct = await product.save();
+    // Add new categories to the product
+    if (categories != null) {
+      product.categories = categories;
+      await Promise.all(
+        categories.map(categoryId =>
+          Category.findByIdAndUpdate(
+            categoryId,
+            { $addToSet: { products: product._id } },
+            { new: true }
+          )
+        )
+      );
+    }
 
-    res.status(200).json({ sucess: true, message: "Success", data:{product: updatedProduct} });
+    const updatedProduct = await product.save();
+    res.status(200).json({ success: true, message: "Success", data:{ product: updatedProduct } });
   } catch (err) {
     next(err);
   }
 };
+
 
 // @desc Delete a product
 exports.deleteProductRoute = async (req, res, next) => {
