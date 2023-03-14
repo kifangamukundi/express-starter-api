@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { v2: cloudinary } = require('cloudinary');
 const ErrorResponse = require("../utils/errorResponse");
 const Product = require("../models/Product");
 const Category = require("../models/Category");
@@ -176,7 +177,7 @@ exports.updateProductRoute = async (req, res, next) => {
 };
 
 
-// @desc Delete a product
+// // @desc Delete a product
 exports.deleteProductRoute = async (req, res, next) => {
   const { id } = req.params;
 
@@ -187,6 +188,33 @@ exports.deleteProductRoute = async (req, res, next) => {
       return next(new ErrorResponse("No product found", 404));
     }
 
+    const cloudinaryConfig = {
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    };
+
+    cloudinary.config(cloudinaryConfig);
+
+    // Delete the default image from Cloudinary
+    await cloudinary.uploader.destroy(product.defaultImage.public_id);
+
+    // Delete the other images from Cloudinary
+    for (const image of product.otherImages) {
+      await cloudinary.uploader.destroy(image.public_id);
+    }
+
+    // Remove product from categories
+    const categoryIds = product.categories;
+    await Promise.all(
+      categoryIds.map((categoryId) =>
+        Category.findByIdAndUpdate(categoryId, {
+          $pull: { products: id },
+        })
+      )
+    );
+
+    // Remove the product from the database
     await product.remove();
 
     res.status(200).json({ sucess: true, message: "Success", data:{product: product} });
